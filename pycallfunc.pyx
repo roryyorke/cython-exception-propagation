@@ -1,8 +1,5 @@
-# See Makefile, which will compile and test this
 # -*-python-*-
-
-# to keep exception info alive
-from cpython cimport Py_INCREF, Py_DECREF
+# See Makefile, which will compile and test this
 
 # for exc_info()
 import sys
@@ -10,24 +7,22 @@ import sys
 # the C library
 cimport c_callfunc
 
-cdef struct calldata:
-    void* f    # Python callback function
-    void* exc  # Exception info
+cdef class calldata:
+    cdef:
+        object f    # Python callback function
+        object exc  # Exception info
 
 # C wrapper for Python callback
 # Does exception handling
 cdef int callback_wrapper(int a, int *b, void *user_data):
-    cdef calldata * cd
-    cd= <calldata*>user_data
+    cdef calldata cd
+    cd= <object>user_data
     f= <object>cd.f
     try:
         b[0]=f(a)
         return 0
     except:
-        exc=sys.exc_info()
-        Py_INCREF(exc)
-        # into the void* wormhole
-        cd.exc=<void*>exc
+        cd.exc=sys.exc_info()
         return 1
 
 # Python wrapper around c_callfunc.call
@@ -35,10 +30,9 @@ cdef int callback_wrapper(int a, int *b, void *user_data):
 def py_call(f,a):
     cdef int b
     cdef calldata cd
-    cd.f=<void*>f
-    if 0 == c_callfunc.c_call(callback_wrapper, a, &b, <void*>&cd):
+    cd=calldata()
+    cd.f=f
+    if 0 == c_callfunc.c_call(callback_wrapper, a, &b, <void*>cd):
         return b
     else:
-        exc=<object>cd.exc
-        Py_DECREF(exc)
-        raise exc[0],exc[1],exc[2]
+        raise cd.exc[0],cd.exc[1],cd.exc[2]
